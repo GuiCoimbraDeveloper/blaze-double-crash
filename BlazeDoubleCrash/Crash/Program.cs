@@ -1,4 +1,4 @@
-﻿using Blaze.Entity;
+﻿using Crash.Entity;
 using System;
 using System.Net.WebSockets;
 using System.Reactive.Linq;
@@ -6,23 +6,21 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Websocket.Client;
-//using Newtonsoft.Json;
 
-namespace Blaze
+namespace Crash
 {
     class Program
     {
-
         private static readonly string token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ODQ1NzgwNiwiYmxvY2tzIjpbXSwiaWF0IjoxNjUwMDUwMjkwLCJleHAiOjE2NTUyMzQyOTB9.x5tzGNmryxckvvOMvnEwKsw0r1R4us7w6NZRSiv-MA0";
         private static readonly int timeoutSendingAliveSocket = 5000;
         private static readonly string api = "wss://api-v2.blaze.com/replication/?EIO=3&transport=websocket";
 
-        private static Database db;
         static void Main(string[] args)
         {
             try
             {
-                db= new Database();
+                situacao=0;
+                // db= new Database();
 
                 var uws = new Uri(api);
 
@@ -62,13 +60,14 @@ namespace Blaze
             }
             finally
             {
-                db.FecharConexao();
+                //db.FecharConexao();
             }
         }
 
         static int situacao = 0;
         protected static async Task OnReceived(ResponseMessage msg)
         {
+
             if (msg.Text.Contains(@"""id"":"))
             {
                 var aux2 = msg.Text.Split(@"[""data"",")[1];
@@ -77,29 +76,52 @@ namespace Blaze
 
                 switch (json.Id)
                 {
-                    case "double.tick":
-                        if (json.Payload.Status.Equals("waiting") && situacao == 0)
+                    case "crash.bet":
+                        Console.WriteLine("bet");
+                        //Console.WriteLine(json.ToString());
+                        break;
+                    case "crash.update":
+
+                        if (json.Payload.status.Equals("waiting"))
                         {
-                            Console.WriteLine(json.ToString());
-                            await db.InserirWaiting(json.Payload);
-                            situacao =1;
+                            Console.WriteLine("update waiting");
                         }
-                        if (json.Payload.Status.Equals("rolling") && situacao == 1)
+                        if (json.Payload.status.Equals("graphing"))
                         {
-                            Console.WriteLine(json.ToString());
-                            await db.InserirRolling(json.Payload);
-                            situacao =2;
+                            Console.WriteLine("update graphing");
                         }
-                        if (json.Payload.Status.Equals("complete") && situacao == 2)
+                        if (json.Payload.status.Equals("complete"))
                         {
+                            Console.WriteLine("update complete");
+                        }
+                        break;
+                    case "crash.tick":
+                        if (json.Payload.crash_point == null)
+                        {
+                            if (json.Payload.status.Equals("graphing") && situacao ==0)
+                            {
+                                Console.WriteLine("tick crash point graphing");
+                                Console.WriteLine(json.ToString());
+                                situacao =1;
+                            }
+                            if (!json.Payload.status.Equals("graphing") && situacao ==1)
+                            {
+                                Console.WriteLine("tick crash point waiting");
+                                Console.WriteLine(json.ToString());
+                                situacao =2;
+                            }
+                        }
+
+                        if (json.Payload.crash_point != null && situacao ==2)
+                        {
+                            Console.WriteLine("tick crash point complete");
                             Console.WriteLine(json.ToString());
-                            await db.InserirComplete(json.Payload);
                             situacao =0;
                         }
                         break;
-                    //default:
-                    //    Console.WriteLine("Tratar Condição: "+json.ToString());
-                    //    break;
+                    default:
+                        Console.WriteLine("Tratar Condição: "+json.ToString());
+                        break;
                 }
             }
         }
@@ -107,8 +129,7 @@ namespace Blaze
         protected static void OnOpen(WebsocketClient client)
         {
             client.Send("2");
-            //client.Send(@"423[""cmd"",{""id"":""subscribe"",""payload"":{""room"":""double""}}]");
-            client.Send(@"423[""cmd"",{""id"":""subscribe"",""payload"":{""room"":""double_v2""}}]");
+            client.Send(@"423[""cmd"",{""id"":""subscribe"",""payload"":{""room"":""crash_v2""}}]");
             client.Send(@"423[""cmd"",{""id"":""authenticate"",""payload"":{""token"":"""+token+@"""}}]");
             client.Send(@"422[""cmd"",{""id"":""authenticate"",""payload"":{""token"":"""+token+@"""}}]");
             client.Send(@"420[""cmd"",{""id"":""authenticate"",""payload"":{""token"":"""+token+@"""}}]");
